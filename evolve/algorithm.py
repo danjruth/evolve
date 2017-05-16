@@ -8,6 +8,7 @@ Created on Sun May 14 17:02:02 2017
 import random
 import pandas as pd
 import numpy as np
+import copy
 
 class member_rules:
     '''
@@ -110,8 +111,13 @@ class population:
         df = self.df.copy()
         
         for ix in np.arange(round(len(self.members)*(1-reinit_frac)),len(self.members)):
-            new_member = member()
-            new_member.rand_init(self.rules)
+            
+            dup_best = np.random.uniform() < 0.3
+            if dup_best:
+                new_member = copy.deepcopy(self.members[0])
+            else:
+                new_member = member()
+                new_member.rand_init(self.rules)
             new_genes = new_member.genes
             df.loc[ix,:] = None
             for gene in list(new_genes.keys()):
@@ -153,7 +159,7 @@ class population:
                 
         self.df = new_df
         
-    def cross_pop(self,cross_frac=0.8,cross_prob=0.3):
+    def cross_pop(self,cross_frac=0.8,cross_prob=0.4,cross_from_frac=0.4):
         '''
         Perform crossover on members of the population.
         '''
@@ -169,7 +175,7 @@ class population:
                 
                 self.df.loc[ix,'has_changed'] = True
                 
-                parent_ix = random.choice(range(len(self.members)))
+                parent_ix = random.choice(range(int(len(self.members)*cross_from_frac)))
                 
                 # get the gene from a parent
                 gene_to_cross = random.choice(mem.rules.genes)
@@ -204,10 +210,10 @@ class genetic_algorithm:
         self.max_iters = max_iters
         self.converge_criteria = (0.000001,4) # opt solution does not change by x1 over x2 iterations
         
-    def run(self,initial_population,viz_update=None):
+    def run(self,initial_population,ax=None):
         
         self.pop_list = [initial_population]
-        import copy
+        
         pop = copy.deepcopy(initial_population)
         
         all_configs_df = pd.DataFrame()
@@ -237,12 +243,12 @@ class genetic_algorithm:
             # show the top score--the actual top score is that stored at the
             # top of the dataframe, as the list entries have not been updated
             print('TOP SCORE:')
-            print(pop.df.loc[0,'score'])
-            print(pop.members[0].score)
+            print(pop.df.loc[0,:])
                         
             self.pop_list.append(copy.deepcopy(pop))
             
             has_converged = (generation>=self.max_iters)
+                
             
         self.optimal_result = pop.members[0]
         self.all_configs_df = all_configs_df
