@@ -60,6 +60,12 @@ class member:
         self.rules = rules
         self.genes = self.rules.random_values()
         
+    def force_adherence(self):
+        for gene in self.genes:
+            rule = self.rules.gene_dict[gene]
+            self.genes[gene] = max(self.genes[gene],rule['min'])
+            self.genes[gene] = min(self.genes[gene],rule['max'])
+        
     def evaluate(self,opt_fun):
         self.score = opt_fun(self.genes)
         return self.score
@@ -114,7 +120,13 @@ class population:
         
         self.df = df        
         
-    def mutate_pop(self,mut_frac=0.8,mut_prob=0.3,mut_num=0.2):
+    '''
+    For mutation and crossover, first just update the df storing the genes.
+    Then, use df_to_memberlist to update the list of members with their new
+    genes.
+    '''
+        
+    def mutate_pop(self,mut_frac=0.8,mut_prob=0.3):
         '''
         Perform mutation on members of the population.
         '''
@@ -126,22 +138,22 @@ class population:
             ix = int(ix_float)
             mem = self.members[ix]
             
-            if random.uniform(0,1) > mut_prob:
+            if random.uniform(0,1) < mut_prob:
+                
+                self.df.loc[ix,'has_changed'] = True
                 
                 # calculate the new value a gene will mutate to
                 gene_to_mut = random.choice(mem.rules.genes)
-                rel_mut_amount = (0.5*(float(ix) / float(len(self.members))))**1.5
+                rel_mut_amount = ((float(ix) / float(len(self.members))))**1.0
                 mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal()
                 new_val = mem.genes[gene_to_mut] + mut_amount
                 
-                # assign this value to both the member object and the dataframe
-                #print('   mutating '+str(self.members[ix].genes[gene_to_mut])+' to '+str(new_val))
-                self.members[ix].genes[gene_to_mut] = new_val
+                # assign this value to the dataframe
                 new_df.loc[ix,gene_to_mut] = new_val
                 
         self.df = new_df
         
-    def cross_pop(self,cross_frac=0.8,cross_prob=0.3,cross_num=0.2):
+    def cross_pop(self,cross_frac=0.8,cross_prob=0.3):
         '''
         Perform crossover on members of the population.
         '''
@@ -153,39 +165,33 @@ class population:
             ix = int(ix_float)
             mem = self.members[ix]
             
-            if random.uniform(0,1) > cross_prob:
+            if random.uniform(0,1) < cross_prob:
+                
+                self.df.loc[ix,'has_changed'] = True
                 
                 parent_ix = random.choice(range(len(self.members)))
                 
-                # calculate the new value a gene will mutate to
+                # get the gene from a parent
                 gene_to_cross = random.choice(mem.rules.genes)
-                new_val = self.members[parent_ix].genes[gene_to_cross]
+                new_val = self.df.loc[parent_ix,gene_to_cross]
                 
-                # assign this value to both the member object and the dataframe
-                #print('   mutating '+str(self.members[ix].genes[gene_to_mut])+' to '+str(new_val))
-                self.members[ix].genes[gene_to_cross] = new_val
+                # assign this value to the dataframe
                 new_df.loc[ix,gene_to_cross] = new_val
                 
         self.df = new_df
                 
     def df_to_memberlist(self):
         
-        new_list = list()
-        
+        new_list = list()        
         for m,mem in enumerate(self.members):
-            
-            # update the member's genes if they have changed
-            #if (self.df.loc[m,'has_changed'] == True):
-            if True:
-                #print(mem.genes)
-                for gene in mem.rules.genes:                    
-                    mem.genes[gene] = self.df.loc[m,gene]
-                #print(mem.genes)
-                #print('-------------')
-                    
+
+            for gene in mem.rules.genes:                    
+                mem.genes[gene] = self.df.loc[m,gene]
+
+            mem.force_adherence()
             new_list.append(mem)
             
-        self.members = new_list         
+        self.members = new_list
             
 
 class genetic_algorithm:
@@ -193,10 +199,52 @@ class genetic_algorithm:
     Class which defines and runs the genetic algorithm.
     '''    
     
-    def __init__(self,opt_fun):
+    def __init__(self,opt_fun,max_iters = 20):
         self.opt_fun = opt_fun
-        self.max_iters = 200
+        self.max_iters = max_iters
         self.converge_criteria = (0.000001,4) # opt solution does not change by x1 over x2 iterations
         
-    def run(self,initial_population=None,viz_update=None):
-        None
+    def run(self,initial_population,viz_update=None):
+        
+        self.pop_list = [initial_population]
+        import copy
+        pop = copy.deepcopy(initial_population)
+        
+        all_configs_df = pd.DataFrame()
+        
+        generation = 0
+        has_converged = False
+        while has_converged==False:
+            
+            generation = generation+1
+            
+            pop = copy.deepcopy(pop)
+                                    
+            pop.evaluate(self.opt_fun)
+            pop.sort_via_df()
+            all_configs_df = all_configs_df.append(pop.df.copy())
+            
+            print('Reinitializing...')
+            pop.reinit_some()
+            
+            print('Mutation and crossover...')
+            pop.mutate_pop()
+            pop.cross_pop()
+            
+            print('Back to the list of members...')
+            pop.df_to_memberlist()
+            
+            # show the top score--the actual top score is that stored at the
+            # top of the dataframe, as the list entries have not been updated
+            print('TOP SCORE:')
+            print(pop.df.loc[0,'score'])
+            print(pop.members[0].score)
+                        
+            self.pop_list.append(copy.deepcopy(pop))
+            
+            has_converged = (generation>=self.max_iters)
+            
+        self.optimal_result = pop.members[0]
+        self.all_configs_df = all_configs_df
+        
+        return self.optimal_result.genes

@@ -5,41 +5,31 @@ Created on Sun May 14 17:30:14 2017
 @author: danjr
 """
 
-import algorithm as ga
+import evolve.algorithm as ga
+import numpy as np
 
-rules_dict = {'a':{'min':2,'max':3},
-              'b':{'min':0,'max':1},
-              'c':{'min':-1,'max':1},
-              'd':{'min':-5,'max':1}}
-my_rules = ga.member_rules(rules_dict)
-my_member = ga.member()
-my_member.rand_init(my_rules)
-
+# define some complicated function to optimize
 def fun_to_opt(genes):
-    return genes['a']**2 - genes['b']*genes['a'] + genes['c']*genes['d'] +  genes['b'] - genes['b']**2
+    
+    a = genes['a']
+    b = genes['b']
+    c = genes['c']
+    d = genes['d']    
+    
+    score = np.sin(a/d) + 3*np.sin(a*c) - (b-3)**2 * (d-a)
+    
+    return score
 
-my_pop = ga.population(my_rules,pop_size=100)
+# define values our parameters to optimize can take
+rules_dict = {'a':{'min':1,'max':2},
+              'b':{'min':0,'max':6},
+              'c':{'min':-5,'max':2},
+              'd':{'min':0.5,'max':1}}
+my_rules = ga.member_rules(rules_dict)
 
-for i in range(50):
+# come up with an initial population
+my_pop = ga.population(my_rules,pop_size=50)
 
-    my_pop.evaluate(fun_to_opt)
-    my_pop.sort_via_df()
-    #print(my_pop.df)
-    
-    print('Reinitializing...')
-    my_pop.reinit_some()
-    #print(my_pop.df)
-    
-    print('Mutating and crossover...')
-    my_pop.mutate_pop()
-    my_pop.cross_pop()
-    #print(my_pop.df)
-    
-    print('Back to list...')
-    my_pop.df_to_memberlist()
-    print(my_pop.df.head())
-    #for mem in my_pop.members:
-        #print(mem.genes)
-    
-    print('TOP SCORE:')
-    print(my_pop.df.loc[0,'score'])
+# create and run the genetic algorithm
+alg = ga.genetic_algorithm(fun_to_opt)
+best_genes = alg.run(my_pop)
