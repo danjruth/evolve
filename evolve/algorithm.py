@@ -9,6 +9,7 @@ import random
 import pandas as pd
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 
 class member_rules:
     '''
@@ -25,18 +26,10 @@ class member_rules:
         
         self.genes = list(gene_dict.keys())
         
-    def check_adherence(self,member):
-        '''
-        Ensure that a member's genes adhere to the rules.
-        '''
-        for gene in self.genes:
-            rule = self.gene_dict[gene]
-            if (rule['max'] > member.genes[gene]) or (rule['min'] < member.genes[gene]):
-                return False
-        else:
-            return True
-        
     def random_values(self):
+        '''
+        Generate a set of genes given the rules.
+        '''
         gene_vals = {}
         for gene in self.genes:
             rule = self.gene_dict[gene]
@@ -62,12 +55,19 @@ class member:
         self.genes = self.rules.random_values()
         
     def force_adherence(self):
+        '''
+        Clamp gene values between the min/max (in case they were mutated 
+        outside of this range).
+        '''
         for gene in self.genes:
             rule = self.rules.gene_dict[gene]
             self.genes[gene] = max(self.genes[gene],rule['min'])
             self.genes[gene] = min(self.genes[gene],rule['max'])
         
     def evaluate(self,opt_fun):
+        '''
+        Score this member with the function to optimize.
+        '''
         self.score = opt_fun(self.genes)
         return self.score
 
@@ -81,6 +81,46 @@ class population:
         [members[m].rand_init(rules) for m in range(pop_size)]
         self.members = members
         self.rules = rules
+        
+    def plot_state(self,fig=None,all_configs_df=None):
+        '''
+        Make a matrix plot of all the members and encode the scores with color.
+        
+        If all_configs_df (pandas dataframe) is given, those members will be 
+        plotted semi-transparently.
+        '''
+        if fig is None:
+            fig = plt.figure(figsize=(9,8))
+        
+        n_genes = len(self.rules.genes)
+        print(n_genes)
+        
+        fig.clear()
+        
+        ai = 0
+        for yi,yg in enumerate(self.rules.genes):
+            for xi,xg in enumerate(self.rules.genes):
+                ai = ai+1
+                ax = fig.add_subplot(int(n_genes),int(n_genes),int(ai))
+                if all_configs_df is not None:
+                    ax.scatter(all_configs_df[xg],all_configs_df[yg],c=all_configs_df['score'],alpha=0.3,s=20)
+                ax.scatter(self.df[xg],self.df[yg],c=self.df['score'],s=20)
+                ax.set_ylim([self.rules.gene_dict[yg]['min'],self.rules.gene_dict[yg]['max']])
+                ax.set_xlim([self.rules.gene_dict[xg]['min'],self.rules.gene_dict[xg]['max']])
+                
+                if xi==0:
+                    ax.set_ylabel(yg)
+                else:
+                    ax.yaxis.set_ticklabels([])
+                    
+                if yi==n_genes-1:
+                    ax.set_xlabel(xg)
+                else:
+                    ax.xaxis.set_ticklabels([])
+        
+        plt.show()
+        plt.pause(.1)
+        plt.show()
         
     def evaluate(self,opt_fun):
         [mem.evaluate(opt_fun) for mem in self.members]
@@ -103,7 +143,7 @@ class population:
             
         self.df = df
         
-    def reinit_some(self,reinit_frac=0.5):
+    def reinit_some(self,reinit_frac=0.3):
         '''
         Delete and randomly reinitialize the worse-performing members.
         '''
@@ -132,7 +172,7 @@ class population:
     genes.
     '''
         
-    def mutate_pop(self,mut_frac=0.8,mut_prob=0.3):
+    def mutate_pop(self,mut_frac=0.8,mut_prob=0.6):
         '''
         Perform mutation on members of the population.
         '''
@@ -146,20 +186,25 @@ class population:
             
             if random.uniform(0,1) < mut_prob:
                 
-                self.df.loc[ix,'has_changed'] = True
+                num_mut = random.choice(range(len(mem.rules.genes))) + 1
+                for gi in range(num_mut):
                 
-                # calculate the new value a gene will mutate to
-                gene_to_mut = random.choice(mem.rules.genes)
-                rel_mut_amount = ((float(ix) / float(len(self.members))))**1.0
-                mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal()
-                new_val = mem.genes[gene_to_mut] + mut_amount
-                
-                # assign this value to the dataframe
-                new_df.loc[ix,gene_to_mut] = new_val
+                    new_df.loc[ix,'has_changed'] = True
+                    
+                    # calculate the new value a gene will mutate to
+                    gene_to_mut = random.choice(mem.rules.genes)
+                    rel_mut_amount = ((float(ix) / float(len(self.members))))**1.0
+                    mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal()
+                    new_val = new_df.loc[ix,gene_to_mut] + mut_amount
+                    
+                    #print(str(ix)+': '+str(mem.genes[gene_to_mut])+' ('+str(new_df.loc[ix,gene_to_mut])+') to '+str(new_val))
+                    
+                    # assign this value to the dataframe
+                    new_df.loc[ix,gene_to_mut] = new_val
                 
         self.df = new_df
         
-    def cross_pop(self,cross_frac=0.8,cross_prob=0.4,cross_from_frac=0.4):
+    def cross_pop(self,cross_frac=0.8,cross_prob=0.6,cross_from_frac=0.4):
         '''
         Perform crossover on members of the population.
         '''
@@ -173,7 +218,7 @@ class population:
             
             if random.uniform(0,1) < cross_prob:
                 
-                self.df.loc[ix,'has_changed'] = True
+                new_df.loc[ix,'has_changed'] = True
                 
                 parent_ix = random.choice(range(int(len(self.members)*cross_from_frac)))
                 
@@ -220,6 +265,7 @@ class genetic_algorithm:
         
         generation = 0
         has_converged = False
+        fig = plt.figure(figsize=(12,8))
         while has_converged==False:
             
             generation = generation+1
@@ -229,6 +275,8 @@ class genetic_algorithm:
             pop.evaluate(self.opt_fun)
             pop.sort_via_df()
             all_configs_df = all_configs_df.append(pop.df.copy())
+            
+            pop.plot_state(fig=fig,all_configs_df=all_configs_df)
             
             print('Reinitializing...')
             pop.reinit_some()
@@ -247,8 +295,7 @@ class genetic_algorithm:
                         
             self.pop_list.append(copy.deepcopy(pop))
             
-            has_converged = (generation>=self.max_iters)
-                
+            has_converged = (generation>=self.max_iters)                
             
         self.optimal_result = pop.members[0]
         self.all_configs_df = all_configs_df
