@@ -301,3 +301,19 @@ class genetic_algorithm:
         self.all_configs_df = all_configs_df
         
         return self.optimal_result.genes
+        
+def get_variable_importance(df):
+    
+    from sklearn.tree import DecisionTreeRegressor
+    
+    x = df.drop(['score','has_changed'],axis=1)
+    print(x)
+    y = df['score']
+    
+    clf = DecisionTreeRegressor(min_samples_leaf=5).fit(x.values,y)
+    
+    imp = {}
+    for g,gene in enumerate(x.columns):
+        imp[gene] = clf.feature_importances_[g]
+    
+    return imp
