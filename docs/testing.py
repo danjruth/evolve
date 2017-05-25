@@ -8,28 +8,27 @@ Created on Sun May 14 17:30:14 2017
 import evolve.algorithm as ga
 import numpy as np
 
-# define some complicated function to optimize
 def fun_to_opt(genes):
     
-    a = genes['a']
-    b = genes['b']
-    c = genes['c']
-    d = genes['d']    
+    a = float(genes['a'])
+    b = float(genes['b'])
+    c = float(genes['c'])
+    d = float(genes['d'])
     
-    score = np.sin(a/d) + 3*np.sin(a*c) - (b-3)**2 * (d-a)
+    score = 2*np.sin((1.5*a+b)*3) + 3*np.sin((a+c**2)/2) + (np.sin(c+d+b+a))**2 - ((a+c-b-d)/4)**2 - 0.5*(d-4)**2
     
     return score
 
 # define values our parameters to optimize can take
-rules_dict = {'a':{'min':1,'max':2},
-              'b':{'min':0,'max':6},
-              'c':{'min':-5,'max':2},
-              'd':{'min':0.5,'max':1}}
+rules_dict = {'a':{'min':.6,'max':10},
+              'b':{'min':5,'max':15},
+              'c':{'min':1,'max':5},
+              'd':{'min':2,'max':5}}
 my_rules = ga.member_rules(rules_dict)
 
 # come up with an initial population
-my_pop = ga.population(my_rules,pop_size=50)
+my_pop = ga.population(my_rules,pop_size=60)
 
 # create and run the genetic algorithm
-alg = ga.genetic_algorithm(fun_to_opt)
+alg = ga.genetic_algorithm(fun_to_opt,max_iters=20)
 best_genes = alg.run(my_pop)
