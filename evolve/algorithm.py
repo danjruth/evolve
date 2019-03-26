@@ -92,9 +92,7 @@ class population:
         if fig is None:
             fig = plt.figure(figsize=(9,8))
         
-        n_genes = len(self.rules.genes)
-        print(n_genes)
-        
+        n_genes = len(self.rules.genes)        
         fig.clear()
         
         ai = 0
@@ -150,9 +148,11 @@ class population:
         
         df = self.df.copy()
         
-        for ix in np.arange(round(len(self.members)*(1-reinit_frac)),len(self.members)):
+        reinit_idxs = np.arange(round(len(self.members)*(1-reinit_frac)),len(self.members))
+        print('Reinitializing the worst '+str(int(len(reinit_idxs)))+' members...')
+        for ix in reinit_idxs:
             
-            dup_best = np.random.uniform() < 0.3
+            dup_best = np.random.uniform() < 0.1
             if dup_best:
                 new_member = copy.deepcopy(self.members[0])
             else:
@@ -179,7 +179,9 @@ class population:
         
         new_df = self.df.copy()
         
-        for ix_float in np.arange(1,round(len(self.members)*mut_frac)):
+        ixs_float = np.arange(1,round(len(self.members)*mut_frac))
+        print('Performing mutations on members '+str(int(ixs_float[0]))+' through '+str(int(ixs_float[-1]))+'...')
+        for ix_float in ixs_float:
             
             ix = int(ix_float)
             mem = self.members[ix]
@@ -211,7 +213,9 @@ class population:
         
         new_df = self.df.copy()
         
-        for ix_float in np.arange(1,round(len(self.members)*cross_frac)):
+        ixs_float = np.arange(1,round(len(self.members)*cross_frac))
+        print('Performing crossover to members '+str(int(ixs_float[0]))+' through '+str(int(ixs_float[-1])))
+        for ix_float in ixs_float:
             
             ix = int(ix_float)
             mem = self.members[ix]
@@ -268,6 +272,8 @@ class genetic_algorithm:
         fig = plt.figure(figsize=(12,8))
         while has_converged==False:
             
+            print('------------------------------------')
+            
             generation = generation+1
             
             pop = copy.deepcopy(pop)
@@ -278,14 +284,14 @@ class genetic_algorithm:
             
             pop.plot_state(fig=fig,all_configs_df=all_configs_df)
             
-            print('Reinitializing...')
+            #print('Reinitializing...')
             pop.reinit_some()
             
-            print('Mutation and crossover...')
+            #print('Mutation and crossover...')
             pop.mutate_pop()
             pop.cross_pop()
             
-            print('Back to the list of members...')
+            #print('Back to the list of members...')
             pop.df_to_memberlist()
             
             # show the top score--the actual top score is that stored at the
