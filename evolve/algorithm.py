@@ -193,13 +193,23 @@ class population:
                 
                     new_df.loc[ix,'has_changed'] = True
                     
-                    # calculate the new value a gene will mutate to
+                    # which gene to mutate
                     gene_to_mut = random.choice(mem.rules.genes)
-                    rel_mut_amount = ((float(ix) / float(len(self.members))))**1.0
-                    #mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal()
-                    #new_val = new_df.loc[ix,gene_to_mut] + mut_amount
-                    new_val = new_df.loc[ix,gene_to_mut]*np.random.normal(1,0.2,)*rel_mut_amount
                     
+                    # relative amount to mutate it given the rank of the member
+                    rel_mut_amount = np.max([0.1,((float(ix) / float(len(self.members))))**1.0])
+                    
+                    '''
+                    Sometimes mutate based on the current value of the gene,
+                    sometimes just add some value set by the gene's limits to 
+                    the current value.
+                    '''
+                    
+                    if random.uniform(0,1)<0.5:
+                        mut_amount = rel_mut_amount * new_df.loc[ix,gene_to_mut]*np.random.normal(0,0.5,)
+                    else:
+                        mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal(0,0.2)
+                    new_val = new_df.loc[ix,gene_to_mut] + mut_amount
                     #print(str(ix)+': '+str(mem.genes[gene_to_mut])+' ('+str(new_df.loc[ix,gene_to_mut])+') to '+str(new_val))
                     
                     # assign this value to the dataframe
@@ -207,7 +217,7 @@ class population:
                 
         self.df = new_df
         
-    def cross_pop(self,cross_frac=0.8,cross_prob=0.6,cross_from_frac=0.4):
+    def cross_pop(self,cross_frac=0.8,cross_prob=0.6,cross_from_frac=0.6):
         '''
         Perform crossover on members of the population.
         '''
@@ -256,7 +266,7 @@ class genetic_algorithm:
     Class which defines and runs the genetic algorithm.
     '''    
     
-    def __init__(self,opt_fun,max_iters = 20):
+    def __init__(self,opt_fun,max_iters=20):
         self.opt_fun = opt_fun
         self.max_iters = max_iters
         self.converge_criteria = (0.000001,4) # opt solution does not change by x1 over x2 iterations
@@ -302,15 +312,18 @@ class genetic_algorithm:
             pop.cross_pop()            
             pop.df_to_memberlist()
             
+            print('In total, '+str(int(np.sum(pop.df['has_changed'])))+' members changed.')
+            
             # show the top score--the actual top score is that stored at the
             # top of the dataframe, as the list entries have not been updated
             print('TOP MEMBER:')
             print(pop.df.loc[0,:])
             print('MEAN SCORE: '+str(np.nanmean(pop.df['score'])))
+            
                         
             self.pop_list.append(copy.deepcopy(pop))
             
-            has_converged = (generation>=self.max_iters) or (score_same_count>5)           
+            has_converged = (generation>=self.max_iters) or (score_same_count>5)
             
         self.optimal_result = pop.members[0]
         self.all_configs_df = all_configs_df
