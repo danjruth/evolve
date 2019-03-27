@@ -141,7 +141,7 @@ class population:
             
         self.df = df
         
-    def reinit_some(self,reinit_frac=0.3):
+    def reinit_some(self,reinit_frac=0.5):
         '''
         Delete and randomly reinitialize the worse-performing members.
         '''
@@ -152,7 +152,7 @@ class population:
         print('Reinitializing the worst '+str(int(len(reinit_idxs)))+' members...')
         for ix in reinit_idxs:
             
-            dup_best = np.random.uniform() < 0.1
+            dup_best = np.random.uniform() < 0.4
             if dup_best:
                 new_member = copy.deepcopy(self.members[0])
             else:
@@ -196,8 +196,9 @@ class population:
                     # calculate the new value a gene will mutate to
                     gene_to_mut = random.choice(mem.rules.genes)
                     rel_mut_amount = ((float(ix) / float(len(self.members))))**1.0
-                    mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal()
-                    new_val = new_df.loc[ix,gene_to_mut] + mut_amount
+                    #mut_amount = rel_mut_amount * (mem.rules.gene_dict[gene_to_mut]['max'] - mem.rules.gene_dict[gene_to_mut]['min']) * np.random.normal()
+                    #new_val = new_df.loc[ix,gene_to_mut] + mut_amount
+                    new_val = new_df.loc[ix,gene_to_mut]*np.random.normal(1,0.2,)*rel_mut_amount
                     
                     #print(str(ix)+': '+str(mem.genes[gene_to_mut])+' ('+str(new_df.loc[ix,gene_to_mut])+') to '+str(new_val))
                     
@@ -214,7 +215,7 @@ class population:
         new_df = self.df.copy()
         
         ixs_float = np.arange(1,round(len(self.members)*cross_frac))
-        print('Performing crossover to members '+str(int(ixs_float[0]))+' through '+str(int(ixs_float[-1])))
+        print('Performing crossover to members '+str(int(ixs_float[0]))+' through '+str(int(ixs_float[-1]))+'...')
         for ix_float in ixs_float:
             
             ix = int(ix_float)
@@ -224,6 +225,7 @@ class population:
                 
                 new_df.loc[ix,'has_changed'] = True
                 
+                # find the parent, picked from the 
                 parent_ix = random.choice(range(int(len(self.members)*cross_from_frac)))
                 
                 # get the gene from a parent
@@ -270,38 +272,45 @@ class genetic_algorithm:
         generation = 0
         has_converged = False
         fig = plt.figure(figsize=(12,8))
+        score = -np.inf
+        score_same_count = 0
         while has_converged==False:
             
             print('------------------------------------')
             
             generation = generation+1
+            print('GENERATION '+str(int(generation)))
             
-            pop = copy.deepcopy(pop)
-                                    
+            # evalulate this new population and sort the results
+            pop = copy.deepcopy(pop)                                    
             pop.evaluate(self.opt_fun)
             pop.sort_via_df()
             all_configs_df = all_configs_df.append(pop.df.copy())
             
+            score_new = pop.df['score'].max()
+            if score_new<=score*1.00001:
+                score_same_count = score_same_count+1
+            else:
+                score_same_count = 0
+            score = score_new
+            
             pop.plot_state(fig=fig,all_configs_df=all_configs_df)
             
-            #print('Reinitializing...')
-            pop.reinit_some()
-            
-            #print('Mutation and crossover...')
+            # perform the changes to the population
+            pop.reinit_some()            
             pop.mutate_pop()
-            pop.cross_pop()
-            
-            #print('Back to the list of members...')
+            pop.cross_pop()            
             pop.df_to_memberlist()
             
             # show the top score--the actual top score is that stored at the
             # top of the dataframe, as the list entries have not been updated
-            print('TOP SCORE:')
+            print('TOP MEMBER:')
             print(pop.df.loc[0,:])
+            print('MEAN SCORE: '+str(np.nanmean(pop.df['score'])))
                         
             self.pop_list.append(copy.deepcopy(pop))
             
-            has_converged = (generation>=self.max_iters)                
+            has_converged = (generation>=self.max_iters) or (score_same_count>5)           
             
         self.optimal_result = pop.members[0]
         self.all_configs_df = all_configs_df
@@ -313,7 +322,6 @@ def get_variable_importance(df):
     from sklearn.tree import DecisionTreeRegressor
     
     x = df.drop(['score','has_changed'],axis=1)
-    print(x)
     y = df['score']
     
     clf = DecisionTreeRegressor(min_samples_leaf=5).fit(x.values,y)
@@ -321,5 +329,7 @@ def get_variable_importance(df):
     imp = {}
     for g,gene in enumerate(x.columns):
         imp[gene] = clf.feature_importances_[g]
+        
+    print(imp)
     
     return imp
